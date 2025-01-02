@@ -1,0 +1,223 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+#Loading Libaries
+
+
+```{r}
+rm(list = ls())
+setwd("Z:/Projects/<CensoredPath>ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+load("PreparedData.Rdata")
+```
+
+
+
+# Comparing different Models
+
+First step is the task of loading all previously trained neural networks.
+
+```{r}
+library(magrittr) #pipes
+library(stringr) # to add leading values
+library(digest)
+library(plyr) # to upload all clean data frames into a list
+library(readr)
+library(foreign)
+library(sjlabelled)                                                                                               
+library(Hmisc)
+library(haven)
+library(fastDummies)
+library(ggpubr)
+library(dplyr)
+
+setwd("Z:/Projects/<CensoredPath>ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+
+load("nn_jan_3.Rdata")
+load("nn_jan_4.Rdata")
+load("nn_jan_5.Rdata")
+load("nn_jan_6.Rdata")
+load("nn_jan_7.Rdata")
+load("nn_jan_8.Rdata")
+load("nn_jan_9.Rdata")
+load("nn_jan_10.Rdata")
+load("nn_jan_13.Rdata")
+load("nn_jan_18.Rdata")
+load("nn_jan_20.Rdata")
+
+
+load("nn_jan_disc_3.Rdata")
+load("nn_jan_disc_4.Rdata")
+load("nn_jan_disc_5.Rdata")
+load("nn_jan_disc_6.Rdata")
+load("nn_jan_disc_7.Rdata")
+load("nn_jan_disc_8.Rdata")
+load("nn_jan_disc_9.Rdata")
+
+load("nn_jan_sse__3.Rdata")
+load("nn_jan_sse__4.Rdata")
+load("nn_jan_sse__5.Rdata")
+load("nn_jan_sse__6.Rdata")
+load("nn_jan_sse__7.Rdata")
+load("nn_jan_sse__8.Rdata")
+load("nn_jan_sse__9.Rdata")
+
+load("nn_jan_tweak_3.Rdata")
+load("nn_jan_tweak_5.Rdata")
+
+
+load("nn_jan_full__3.Rdata")
+load("nn_jan_full__4.Rdata")
+load("nn_jan_full__5.Rdata")
+load("nn_jan_full__6.Rdata")
+load("nn_jan_full__7.Rdata")
+load("nn_jan_full__8.Rdata")
+load("nn_jan_full__9.Rdata")
+
+load("nn_jan_relaxed3.Rdata")
+load("nn_jan_relaxed4.Rdata")
+load("nn_jan_relaxed5.Rdata")
+load("nn_jan_relaxed6.Rdata")
+load("nn_jan_relaxed7.Rdata")
+load("nn_jan_relaxed8.Rdata")
+load("nn_jan_relaxed9.Rdata")
+
+
+#perf1<-rbind(nn_jan_3,nn_jan_4,nn_jan_5,nn_jan_6,nn_jan_7,nn_jan_8,nn_jan_9, nn_jan_10, nn_jan_13, nn_jan_18, nn_jan_20) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+
+perf1<-rbind(nn_jan_3,nn_jan_4,nn_jan_5,nn_jan_6,nn_jan_7,nn_jan_8,nn_jan_9) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf1$Method="Capped Data - Logistic"
+perf1$numHidden <- perf1$numHidden -0.1
+
+
+
+
+   
+perf2<-rbind(nn_jan_disc_3,nn_jan_disc_4,nn_jan_disc_5,nn_jan_disc_6,nn_jan_disc_7,nn_jan_disc_8,nn_jan_disc_9) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf2$Method="Capped Data - Logistic - Oversampling"
+perf2$numHidden <- perf2$numHidden 
+
+
+perf3<-rbind(nn_jan_sse__3,nn_jan_sse__4,nn_jan_sse__5,nn_jan_sse__6,nn_jan_sse__7,nn_jan_sse__8,nn_jan_sse__9) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf3$Method="Capped Data - Logistic - SSE Training"
+perf3$numHidden <- perf3$numHidden + 0.1
+
+perf4<-rbind(nn_jan_tweak_3, nn_jan_tweak_5) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf4$Method="Capped Data - Logistic - Tweaked Threshold"
+perf4$numHidden <- perf4$numHidden - 0.2
+
+perf5<-rbind(nn_jan_full__3,nn_jan_full__4,nn_jan_full__5,nn_jan_full__6,nn_jan_full__7,nn_jan_full__8,nn_jan_full__9) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf5$Method="Full Data - Logistic"
+perf5$numHidden <- perf5$numHidden 
+
+
+perf6<-rbind(nn_jan_relaxed3,nn_jan_relaxed4,nn_jan_relaxed5,nn_jan_relaxed6,nn_jan_relaxed7,nn_jan_relaxed8,nn_jan_relaxed9) %>% group_by(numHidden) %>% summarise(Mean=mean(test),SD=sd(test),tMean=mean(train),tSD=sd(train))
+perf6$Method="Capped Data - Logistic - Increased Threshodl"
+perf6$numHidden <- perf6$numHidden + 0.2 
+```
+
+
+
+
+```{r fig.height=9, fig.width=9}
+
+setwd("Z:/Projects/<CensoredPath>ML/Code/RAnalysen")
+
+
+results<-rbind(perf1,perf2,perf3,perf5,perf6)
+
+
+plotPerformance1 <- ggplot(data = results, aes(x=numHidden, y=Mean, group=Method, colour=Method))
+  plotPerformance1 <- plotPerformance1 +   geom_point() + geom_line(size=0.8) + 
+  #geom_point(aes(x=numHidden, y=Mean-SD, colour=Method )) +
+  geom_errorbar(aes(ymin=Mean-SD,ymax=Mean+SD), width=0.3,alpha=0.4) +
+  geom_hline(aes(yintercept=1-0.6751358, colour = "Best Greedy Predictor - Full Data")) +
+  geom_hline(aes(yintercept=1-0.4692865, colour = "Best Greedy Predictor - Capped Data")) +
+
+    scale_x_continuous(limits = c(2.7,9.5), breaks = 3:9, minor_breaks = NULL) +
+    scale_y_continuous(limits = c(0.22,0.55), breaks = (22:55)/100, minor_breaks = NULL) +
+    xlab(paste0("Number of Hidden Neurons"))  + 
+    ylab("Share of False Classifications on Test Datasets") +
+    theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) +
+    guides(colour=guide_legend(nrow=4,byrow=TRUE, direction="vertical"))
+    
+ # print(plotPerformance)
+  
+  
+plotPerformance2 <- ggplot(data = results, aes(x=numHidden, y=tMean, group=Method, colour=Method))
+  plotPerformance2 <- plotPerformance2 +   geom_point() + geom_line(size=0.8) + 
+  #geom_point(aes(x=numHidden, y=Mean-SD, colour=Method )) +
+  geom_errorbar(aes(ymin=tMean-tSD,ymax=tMean+tSD), width=0.3,alpha=0.4) +
+  geom_hline(aes(yintercept=1-0.6751358, colour = "Best Greedy Predictor - Full Data")) +
+  geom_hline(aes(yintercept=1-0.4692865, colour = "Best Greedy Predictor - Capped Data")) +
+
+    scale_x_continuous(limits = c(2.7,9.5), breaks = 3:9, minor_breaks = NULL) +
+    scale_y_continuous(limits = c(0.22,0.55), breaks = (22:55)/100, minor_breaks = NULL) +
+    xlab(paste0("Number of Hidden Neurons"))  + 
+    ylab("Share of False Classifications on Training Datasets") +
+    labs(colour="Configuration of Network Structure") +
+    theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) +
+    guides(colour=guide_legend(nrow=4,byrow=TRUE, direction="vertical"))
+    
+ # print(plotPerformance) 
+  
+  figure <- ggarrange(plotPerformance1,plotPerformance2,ncol = 2, nrow = 1, common.legend=TRUE, legend="bottom", legend.grob=get_legend(plotPerformance2))+
+    guides(colour=guide_legend(nrow=2,byrow=TRUE, direction="vertical")) 
+ 
+  write.table(results, file="./exports4/results.csv") ## Test performanceo of newest NN
+  #ggsave(filename="plotPerformance.png",figure, width=15, units = "cm", dpi=500)
+```
+
+```{r fig.height=9, fig.width=9}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=7, fig.width=7}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=5, fig.width=5}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=7}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=5}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=7, fig.width=5}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+
+```{r fig.height=8, fig.width=4}
+plotPerformance1
+plotPerformance2
+plot(figure)
+```
+We can see that
+- Neural Networks are already over-specified for small number of hidden neurons. There is no sign, that we will have the typical valley for the test data
+- Full dataset has smalle variance, most likely to a strong focus on learning the difference between 1 and 2. Althought the performance seems better, in comparision to the benchmarks it is worse
+- SSE seems to be better on the training dataset but has not a better performance on the Test data.
+
+
+

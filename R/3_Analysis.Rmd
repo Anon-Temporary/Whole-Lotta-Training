@@ -1,0 +1,594 @@
+---
+title: "R Notebook"
+output:
+  word_document: 
+    fig_width: 10
+    fig_height: 13
+    fig_caption: yes
+  html_notebook: default
+  html_document:
+    df_print: paged
+---
+
+#Loading Libaries
+
+
+```{r}
+rm(list = ls())
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+library(magrittr) #pipes
+library(stringr) # to add leading values
+library(digest)
+library(plyr) # to upload all clean data frames into a list
+library(readr)
+library(foreign)
+library(sjlabelled)                                                                                                 
+library(Hmisc)
+library(haven)
+library(fastDummies)
+
+load("PreparedData.Rdata")
+```
+
+
+
+```{r}
+library(neuralnet)
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+
+load("nn_model_4.Rdata")
+nn_kat <- nn_model_4
+```
+
+
+
+```{r fig.height=9, fig.width=9}
+plot(nn_kat, radius = 0.1, arrow.length=0.22, fontsize = 10)
+```
+
+```{r fig.height=7, fig.width=7}
+plot(nn_kat, radius = 0.1, arrow.length=0.22, fontsize = 10)
+```
+
+```{r fig.height=7, fig.width=9}
+plot(nn_kat, radius = 0.1, arrow.length=0.22, fontsize = 10)
+```
+ 
+```{r fig.height=5, fig.width=9}
+plot(nn_kat, radius = 0.1, arrow.length=0.22, fontsize = 10)
+```
+  
+ 
+```{r}
+library(nnet)
+library(neuralnet)
+library(NeuralNetTools)
+olden(nn_kat, out_var="Staying in School") + theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=1))
+olden(nn_kat, out_var="Dual VET") + theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=1))
+olden(nn_kat, out_var="School-based VET") + theme(axis.text.x = element_text(angle = 90, vjust=0.5, hjust=1))
+
+olden_val1<-olden(nn_kat,bar_plot=FALSE, out_var="Staying in School")
+olden_val2<-olden(nn_kat,bar_plot=FALSE, out_var="Dual VET")
+olden_val3<-olden(nn_kat,bar_plot=FALSE, out_var="School-based VET")
+olden_val<-cbind("Staying in School"=olden_val1, "Dual VET"=olden_val2, "School-based VET" = olden_val3)
+
+write.table(olden_val, file="./exports4/olden_val.csv")
+```
+ 
+ 
+ 
+```{r}
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+
+
+norm_df_full <- normalize(df_relevant_full)
+
+kat_hidden <- compute_hidden_neurons_activities_classification(normalize(df_relevant_full),nn_kat)
+
+classes <- c("Staying in School","Dual VET","School-based VET")
+output<-kat_hidden[,classes]
+output$best <- classes[max.col(output)]
+output$train <- df_relevant_full$train
+
+print("Right Choices:")
+mean(output$train == output$best)
+
+b0t0 <- sum(output$best==classes[1] & output$train==classes[1]) 
+b1t0 <- sum(output$best==classes[2] & output$train==classes[1]) 
+b2t0 <- sum(output$best==classes[3] & output$train==classes[1]) 
+
+b0t1<-sum(output$best==classes[1] & output$train==classes[2]) 
+b1t1<-sum(output$best==classes[2] & output$train==classes[2]) 
+b2t1<-sum(output$best==classes[3] & output$train==classes[2]) 
+
+b0t2<-sum(output$best==classes[1] & output$train==classes[3]) 
+b1t2<-sum(output$best==classes[2] & output$train==classes[3]) 
+b2t2<- sum(output$best==classes[3] & output$train==classes[3]) 
+
+
+real0<-c(b0t0,b1t0,b2t0)
+real1<-c(b0t1,b1t1,b2t1)
+real2<-c(b0t2,b1t2,b2t2)
+
+pr_matrix<-cbind(real0,real1,real2)
+rownames(pr_matrix)<-classes
+print("")
+print("Absolute Classifications ")
+
+pr_matrix
+
+print("")
+print("Real 0,1,2")
+t0<-sum(output$train==classes[1])
+t1<-sum(output$train==classes[2])
+t2<-sum(output$train==classes[3])
+t0
+t1
+t2
+
+print("")
+print("Prediction 0,1,2")
+b0<-sum(output$best==classes[1])
+b1<-sum(output$best==classes[2])
+b2<-sum(output$best==classes[3])
+b0 
+b1 
+b2
+
+train<-c(t0,t1,t2)
+best<-c(b0,b1,b2)
+
+print("")
+print("relative to classification ")
+pr_matrix1<-pr_matrix /best
+pr_matrix1
+
+print("")
+print("relative to classified")
+
+pr_matrix2<-t(t(pr_matrix) / train)
+pr_matrix2
+
+
+write.table(pr_matrix, file="./exports4/pr_matrix.csv")
+write.table(pr_matrix1, file="./exports4/pr_matrix1.csv")
+write.table(pr_matrix2, file="./exports4/pr_matrix2.csv")
+
+```
+
+### Control for same institutes and courses
+
+
+
+## Weights 
+First print the weights of the hidden neurons
+```{r}
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+weights_kat <- show_best_weights(nn_kat)
+weights_first <- weights_kat$input
+weights_second <- weights_kat$hidden
+colnames(weights_second)<-sort(classes)
+rownames(weights_first) <- c("Bias", colnames(df_relevant_full)[-25])
+write.table(weights_first, file="./exports4/weights_first_layer_NN.csv")
+write.table(weights_second, file="./exports4/weights_second_layer_NN.csv")
+weights_first
+weights_second
+```
+
+
+## Computation of Shapley Values
+
+For implementing interpretability of our neural network we compute shapley values. While the exact calculation of SHAP values is rather complex and not available in any R package that works with our chosen network architecture, we are implementing approximate shapley values through the package fastshap. nsim was choosen as high as feasible for a calculation within 1 hour (500). Finally we calculate the contribution plots of the results. Note: The results also include observations which belong to other classifications for now.
+
+
+
+```{r}
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+library(fastshap)
+library(data.table)
+library(neuralnet)
+
+df_relevant<-normalize(df_relevant_full)
+
+set.seed(8188)
+
+nn_kat_model <- nn_kat
+
+predict_class_1 <- function(object,newdata)
+{
+ predict(object, newdata = newdata)[,1]  
+}
+
+predict_class_2 <- function(object,newdata)
+{
+ predict(object, newdata = newdata)[,2]  
+}
+
+predict_class_3 <- function(object,newdata)
+{
+ predict(object, newdata = newdata)[,3] 
+}
+
+message(Sys.time())
+shap_calculation1 <- explain(nn_kat_model, X=subset(df_relevant, select = -train), pred_wrapper = predict_class_1, nsim=300, adjust=TRUE)
+message(Sys.time())
+shap_calculation2 <- explain(nn_kat_model, X=subset(df_relevant, select = -train), pred_wrapper = predict_class_2, nsim=300, adjust=TRUE)
+message(Sys.time())
+shap_calculation3 <- explain(nn_kat_model, X=subset(df_relevant, select = -train), pred_wrapper = predict_class_3, nsim=300, adjust=TRUE)
+message(Sys.time())
+
+save.image("shapley_computed.Rdata")
+```
+
+```{r}
+#load("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen/shapley_computed.Rdata")
+
+autoplot(shap_calculation1, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3)) +
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Dual VET")
+autoplot(shap_calculation2, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: School-based VET")
+autoplot(shap_calculation3, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Staying in School ")
+```
+```{r fig.height=9, fig.width=9}
+
+autoplot(shap_calculation1, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3)) +
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Dual VET")
+autoplot(shap_calculation2, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: School-based VET")
+autoplot(shap_calculation3, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Staying in School ")
+```
+```{r fig.height=9, fig.width=5}
+#load.image("shapley_computed.Rdata")
+
+autoplot(shap_calculation1, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3)) +
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Dual VET")
+autoplot(shap_calculation2, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: School-based VET")
+autoplot(shap_calculation3, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Staying in School ")
+```
+
+```{r fig.height=9, fig.width=7}
+library(fastshap)
+library(data.table)
+
+autoplot(shap_calculation1, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3)) +
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Dual VET")
+autoplot(shap_calculation2, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: School-based VET")
+autoplot(shap_calculation3, type="contribution")  +
+  scale_fill_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  scale_colour_gradientn(colours=hcl.colors(3, "Temps", rev=TRUE), limits=c(-0.3, 0.3))+
+  ylim(-0.2, 0.27) + ylab("Average Shapley Value for: Staying in School ")
+```
+
+###Advanced Shapley Plots
+
+
+In our next step we will focus our analysis on the predicted values for each observation and analyse how these prediction was calculated. For each output neuron, we reduce the matrix of the Shapley values by the ones that contribute to the prediction. Afterwards we will plot again the importance scores for each 
+
+
+
+```{r fig.height=12, fig.width=18}
+library(data.table)
+library(ggpubr)
+library(dplyr)
+sort_classes<-sort(classes)
+
+### Append winning Class
+shap_calculation1_class <- cbind(shap_calculation1, predicted_class = as.factor(sort_classes[apply( predict(nn_kat_model, df_relevant), 1, which.max)]))
+
+shap_calculation2_class <-  cbind(shap_calculation2, predicted_class = as.factor(sort_classes[apply( predict(nn_kat_model, df_relevant), 1, which.max)]))
+
+shap_calculation3_class <-  cbind(shap_calculation3,  predicted_class = as.factor(sort_classes[apply( predict(nn_kat_model, df_relevant), 1, which.max)]))
+
+##### Append winning class to data input
+orig_data_class <- cbind(df_relevant, predicted_class = as.factor(sort_classes[apply( predict(nn_kat_model, df_relevant), 1, which.max)]))
+
+#### Reduce just for winning class
+shap_calculation1_reduced <- shap_calculation1_class#[shap_calculation1_class$predicted_class==sort_classes[1],]
+shap_calculation2_reduced <- shap_calculation2_class#[shap_calculation2_class$predicted_class==sort_classes[2],]
+shap_calculation3_reduced <- shap_calculation3_class#[shap_calculation3_class$predicted_class==sort_classes[3],]
+
+
+orig_data_1 <- orig_data_class#[orig_data_class$predicted_class==sort_classes[1],]
+orig_data_2 <- orig_data_class#[orig_data_class$predicted_class==sort_classes[2],]
+orig_data_3 <- orig_data_class#[orig_data_class$predicted_class==sort_classes[3],]
+
+# Assign IDS
+shap_calculation1_reduced$id<-1:nrow(shap_calculation1_reduced)
+orig_data_1$id <- 1:nrow(orig_data_1)
+
+shap_calculation2_reduced$id<-1:nrow(shap_calculation2_reduced)
+orig_data_2$id <- 1:nrow(orig_data_2)
+
+shap_calculation3_reduced$id<-1:nrow(shap_calculation3_reduced)
+orig_data_3$id <- 1:nrow(orig_data_3)
+
+#Transform to long
+shap_1_long <- melt(shap_calculation1_reduced, id.vars="id", variable.name="variable", value.name="SHAP")
+orig_1_long <- melt(orig_data_1, id.vars=c("id","train"), variable.name="variable", value.name="orig.value")
+
+shap_2_long <- melt(shap_calculation2_reduced, id.vars="id", variable.name="variable", value.name="SHAP")
+orig_2_long <- melt(orig_data_2, id.vars=c("id","train"), variable.name="variable", value.name="orig.value")
+
+shap_3_long <- melt(shap_calculation3_reduced, id.vars="id", variable.name="variable", value.name="SHAP")
+orig_3_long <- melt(orig_data_3, id.vars=c("id","train"), variable.name="variable", value.name="orig.value")
+
+#Merge
+class_1_comb <- merge(shap_1_long,orig_1_long, by=c("id","variable"))
+class_1_comb$SHAP <- as.numeric(class_1_comb$SHAP)
+class_1_comb$orig.value <- as.numeric(class_1_comb$orig.value)
+class_1_comb <- class_1_comb[class_1_comb$variable != "predicted_class",]
+class_1_comb$class = sort_classes[1]
+
+class_2_comb <- merge(shap_2_long,orig_2_long, by=c("id","variable"))
+class_2_comb$SHAP <- as.numeric(class_2_comb$SHAP)
+class_2_comb$orig.value <- as.numeric(class_2_comb$orig.value)
+class_2_comb <- class_2_comb[class_2_comb$variable != "predicted_class",]
+class_2_comb$class = sort_classes[2]
+
+class_3_comb <- merge(shap_3_long,orig_3_long, by=c("id","variable"))
+class_3_comb$SHAP <- as.numeric(class_3_comb$SHAP)
+class_3_comb$orig.value <- as.numeric(class_3_comb$orig.value)
+class_3_comb <- class_3_comb[class_3_comb$variable != "predicted_class",]
+class_3_comb$class = sort_classes[3]
+  
+comb <- rbind(class_1_comb,class_2_comb,class_3_comb)
+
+class_1_combo <- class_1_comb
+class_2_combo <- class_2_comb
+class_3_combo <- class_3_comb
+
+meanabs <- function(x)
+{
+  return(mean(abs(x)))
+}
+```
+
+```{r fig.height=12, fig.width=18}
+
+  class_1_comb <- class_1_combo
+  class_2_comb <- class_2_combo
+  class_3_comb <- class_3_combo
+  
+  plot1 <- ggplot() +
+  geom_point(data = class_1_comb, aes(x = reorder(variable, SHAP,meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Dual VET") +
+  xlab(paste0("Variables")) +
+    labs(colour="Scaled Original Value of Variable for Observation") +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in")) +
+    guides(colour=guide_colorbar(title.position="bottom",label.position = "bottom")) +
+  coord_flip()
+
+
+  plot2 <- ggplot() +
+  geom_jitter(data = class_2_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: School-based VET") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+
+  coord_flip()
+
+
+  plot3 <- ggplot() +
+  geom_jitter(data = class_3_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Staying in School") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+  scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  coord_flip()
+
+  
+ figure <- ggarrange(plot1,plot2,plot3,ncol = 3, nrow = 1, common.legend=TRUE, legend="bottom", legend.grob=get_legend(plot1))
+```
+
+
+```{r fig.height=12, fig.width=18}
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=15}
+plot(figure)
+```
+
+
+
+# Print only right classifications per classification
+
+```{r fig.height=12, fig.width=18}
+
+  class_1_comb <- class_1_combo[(class_1_combo$train==class_1_combo$class)&(class_1_combo$train=="Dual VET"),]
+  class_2_comb <- class_2_combo[(class_2_combo$train==class_2_combo$class)&(class_2_combo$train=="School-based VET"),]
+  class_3_comb <- class_3_combo[(class_3_combo$train==class_3_combo$class)&(class_3_combo$train=="Staying in School"),]
+  
+  plot1 <- ggplot() +
+  geom_point(data = class_1_comb, aes(x = reorder(variable, SHAP,meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Dual VET") +
+  xlab(paste0("Variables")) +
+    labs(colour="Scaled Original Value of Variable for Observation") +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in")) +
+    guides(colour=guide_colorbar(title.position="bottom",label.position = "bottom")) +
+  coord_flip()
+
+
+  plot2 <- ggplot() +
+  geom_jitter(data = class_2_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: School-based VET") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+
+  coord_flip()
+
+
+  plot3 <- ggplot() +
+  geom_jitter(data = class_3_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Staying in School") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+  scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  coord_flip()
+
+  
+ figure <- ggarrange(plot1,plot2,plot3,ncol = 3, nrow = 1, common.legend=TRUE, legend="bottom", legend.grob=get_legend(plot1))
+```
+
+
+```{r fig.height=12, fig.width=18}
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=15}
+plot(figure)
+```
+
+
+
+
+# Print all Classified observations per Classification
+
+```{r fig.height=12, fig.width=18}
+
+  class_1_comb <- class_1_combo[(class_1_combo$class=="Dual VET"),]
+  class_2_comb <- class_2_combo[(class_2_combo$class=="School-based VET"),]
+  class_3_comb <- class_3_combo[(class_3_combo$class=="Staying in School"),]
+  
+  plot1 <- ggplot() +
+  geom_point(data = class_1_comb, aes(x = reorder(variable, SHAP,meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Dual VET") +
+  xlab(paste0("Variables")) +
+    labs(colour="Scaled Original Value of Variable for Observation") +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in")) +
+    guides(colour=guide_colorbar(title.position="bottom",label.position = "bottom")) +
+  coord_flip()
+
+
+  plot2 <- ggplot() +
+  geom_jitter(data = class_2_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: School-based VET") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+
+  coord_flip()
+
+
+  plot3 <- ggplot() +
+  geom_jitter(data = class_3_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Staying in School") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+  scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  coord_flip()
+
+  
+ figure <- ggarrange(plot1,plot2,plot3,ncol = 3, nrow = 1, common.legend=TRUE, legend="bottom", legend.grob=get_legend(plot1))
+```
+
+
+```{r fig.height=12, fig.width=18}
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=15}
+plot(figure)
+```
+
+
+
+# Print only wrong Classifications per Classification
+
+
+```{r fig.height=12, fig.width=18}
+
+  class_1_comb <- class_1_combo[(class_1_combo$train!=class_1_combo$class)&(class_1_combo$class=="Dual VET"),]
+  class_2_comb <- class_2_combo[(class_2_combo$train!=class_2_combo$class)&(class_2_combo$class=="School-based VET"),]
+  class_3_comb <- class_3_combo[(class_3_combo$train!=class_3_combo$class)&(class_3_combo$class=="Staying in School"),]
+  
+  plot1 <- ggplot() +
+  geom_point(data = class_1_comb, aes(x = reorder(variable, SHAP,meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Dual VET") +
+  xlab(paste0("Variables")) +
+    labs(colour="Scaled Original Value of Variable for Observation") +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in")) +
+    guides(colour=guide_colorbar(title.position="bottom",label.position = "bottom")) +
+  coord_flip()
+
+
+  plot2 <- ggplot() +
+  geom_jitter(data = class_2_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: School-based VET") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+      scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+
+  coord_flip()
+
+
+  plot3 <- ggplot() +
+  geom_jitter(data = class_3_comb, aes(x = reorder(variable, SHAP, meanabs), y=SHAP,  colour=orig.value), shape=4,size=0.15, position= position_jitterdodge(jitter.width=0.8, dodge.width=0.2)) +
+  ylab("Impact on Probability for Classification: Staying in School") +
+  xlab(paste0("Variables")) +
+  scale_colour_gradientn(colours=hcl.colors(4, "Temps", rev=TRUE))+
+  scale_y_continuous(limits = c(-0.3,0.3), breaks = (-5:5)/10, minor_breaks = NULL) +
+  coord_flip()
+
+  
+ figure <- ggarrange(plot1,plot2,plot3,ncol = 3, nrow = 1, common.legend=TRUE, legend="bottom", legend.grob=get_legend(plot1))
+```
+
+
+
+```{r fig.height=12, fig.width=18}
+plot(figure)
+```
+
+```{r fig.height=9, fig.width=15}
+plot(figure)
+```
+
+
+
+
+
+
+

@@ -1,0 +1,302 @@
+---
+title: "R Notebook"
+output:
+  word_document: default
+  html_document: default
+  pdf_document: default
+---
+
+# Data
+The data used is pre-prepared in STATA. SC4 was used. We use the data from spVocTrain and recode our training variable to the first transition in class ~10, dependent on continueing school 0, starting a classic dual-VET 1, or a school-based VET 2. Some indivuals started f.e.  with 2 in 2014 and continued with a 1 in 2020. In this case the person will be encoded as a 2. For a detailed description, please refer to the STATA script.
+
+
+# Set UP
+In the Set up we prepare our Dataset to be well formated for the neural network. This means, that all input parameters are numeric values. This implies that factors need to be converted to dummy variables (except for the output). The transformation for to factors and numerics is conducted for the whole dataset. The creation of dummy variables is done only for the relevant sub-dataset that will be included in our model.
+
+```{r}
+rm(list = ls())
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+library(magrittr) #pipes
+library(stringr) # to add leading values
+library(digest)
+library(plyr) # to upload all clean data frames into a list
+library(readr)
+library(foreign)
+library(sjlabelled)                                                                                                 
+library(Hmisc)
+library(haven)
+library(fastDummies)
+
+```
+
+```{r}
+school_data <- read_dta("Z:/Projects/<CensoredPath>/ML/Merging/school_grades.dta")
+```
+
+```{r}
+library(dplyr)
+school <- school_data %>% group_by(ID_i) %>% summarize(Mean = mean(grade))
+```
+
+```{r}
+colnames(school)<-c("ID_i","school_average_score")
+```
+
+
+
+```{r}
+## Load Dataset
+df <- read_dta("Z:/Projects/<CensoredPath>/ML/Merging/SC4_v12_VET_school_indi_regio.dta")
+df <- dplyr::inner_join(df,school,by="ID_i")
+
+#load("Z:/Projects/<CensoredPath>/ML/backup_Rdata_october.RData")
+
+#### Select Factors
+df$train <- as.factor(df$train)
+df$ts11202_g4O <- as.factor(df$ts11202_g4O)
+df$parent_aca <- as.factor(df$parent_aca)
+df$parent_edu <- as.factor(df$parent_edu)
+df$sex <- as.factor(df$sex)
+df$migback <- as.factor(df$migback)
+df$school_dipl <- as.factor(df$school_dipl)
+df$Aggata7e <- as.factor(df$Aggata7e)
+
+#### Delete Variables
+df_subset <- subset(df, select = - c(ID_t,splink,spell,wave,subspell,start_month, Rauite0f))
+df_subset <- df_subset[df_subset$start_year>0,]
+
+
+#### Transform Variables
+df_subset <- conditionalCast(df_subset)
+
+### Create Dataset for analysis
+
+# New combined Analysis
+df_relevant3 <- df_subset[,c("grade","school_dipl","t66800e_g1","t66800d_g1","t66800c_g1","t66800b_g1","t66800a_g1","parent_edu","parent_aca","migback","sex","Arb11dc6","Aus139ca","Bes13ca9","Sti13bf0","Gro13021","Pen178cc","Ver131ea", "Ein11b9d", "UrbEm43b", "Antrt4be", "school_average_score")]
+
+
+colnames(df_relevant3) <- c(
+                          "last_diploma_score",
+                          "last_diploma_type",
+                          "b5_openness",
+                          "b5_neuroticism",
+                          "b5_conscientiousness",
+                          "b5_agreeableness",
+                          "b5_extravision",
+                          "parents_school_edu",
+                          "parents_academic_edu",
+                          "mig_background",
+                          "sex",
+                          "reg_unemployed",
+                          "reg_vet_positions",
+                          "reg_mint_empoyments",
+                          "reg_consverative_voters",
+                          "reg_big_companies",
+                          "reg_commuters_150km",
+                          "reg_working_females",
+                          "reg_young_people",
+                          "reg_urban_permeation",
+                          "reg_industry_area",
+                          "school_average_score"
+                          )
+
+df_relevant3 <-  df_relevant3[,c("last_diploma_type","last_diploma_score","sex","mig_background","parents_school_edu","parents_academic_edu","reg_unemployed","reg_mint_empoyments","reg_consverative_voters","reg_vet_positions","reg_big_companies","reg_commuters_150km","reg_working_females", "reg_young_people","reg_industry_area", "reg_urban_permeation", "school_average_score")]
+
+
+df_relevant3 <- dummy_cols(df_relevant3, remove_first_dummy=FALSE,remove_selected_columns = TRUE)
+colnames(df_relevant3)[colnames(df_relevant3)=="sex_0"]="female"
+colnames(df_relevant3)[colnames(df_relevant3)=="sex_1"]="male"
+colnames(df_relevant3)[colnames(df_relevant3)=="last_diploma_type_3"]="last_diploma_type_2"
+
+
+
+df_relevant3$train <- df_subset$train 
+df_relevant3$train <- as.factor(df_relevant3$train )
+
+
+df_relevant_full <- df_relevant3
+df_relevant_full_ct <- df_relevant3
+df_relevant_full_ct$con_school <- df_subset$ID_i
+df_relevant_full_ct$con_course <- df_subset$ID_cm
+df_relevant_full <- na.omit(df_relevant_full)
+df_relevant_full_ct <- na.omit(df_relevant_full_ct)
+
+df_relevant3 <- na.omit(df_relevant3)
+```
+
+In general our Test Dataset will consist of following information:
+
+- school diploma : school_dipl
+- grades: grade 
+- parental educ./occup.: parent_edu, parent_aca
+- migration background: migback
+- sex: sex
+
+- unemployment rate 
+- types of school leavers (cohort size)
+- training places in region
+- political preferences (normative culture in region)
+- commuting distances
+- industrial structure of region (branches, sectors etc.)
+
+
+# Subgroup reduction for training
+```{r}
+set.seed("8188")
+
+
+############# Create smaller samples from subgroups
+#### We sample (if possible), such that all groups are equal size
+
+st_2 <- df_relevant3[df_relevant3$train==2,]
+
+size <- 400
+
+st_0 <- df_relevant3[df_relevant3$train==0,]
+st_00 <- st_0[st_0$last_diploma_type_0==1,]
+st_01 <- st_0[st_0$last_diploma_type_1==1,]
+st_03 <- st_0[st_0$last_diploma_type_2==1,]
+
+st_1 <- df_relevant3[df_relevant3$train==1,]
+st_10 <- st_1[st_1$last_diploma_type_0==1,]
+st_11 <- st_1[st_1$last_diploma_type_1==1,]
+st_13 <- st_1[st_1$last_diploma_type_2==1,]
+
+st_2 <- df_relevant3[df_relevant3$train==2,]
+st_20 <- st_2[st_2$last_diploma_type_0==1,]
+st_21 <- st_2[st_2$last_diploma_type_1==1,]
+st_23 <- st_2[st_2$last_diploma_type_2==1,]
+
+
+print("Staying in School")
+nrow(st_0)
+nrow(st_00)
+nrow(st_01)
+nrow(st_03)
+
+print("Dual VET")
+nrow(st_1)
+nrow(st_10)
+nrow(st_11)
+nrow(st_13)
+
+print("VET School")
+nrow(st_2)
+nrow(st_20)
+nrow(st_21)
+nrow(st_23)
+
+
+#st_00 <- st_00[sample(1:nrow(st_00),size),]
+st_01 <- st_01[sample(1:nrow(st_01),size),]
+st_03 <- st_03[sample(1:nrow(st_03),size),]
+
+#st_10 <- st_10[sample(1:nrow(st_10),size),]
+st_11 <- st_11[sample(1:nrow(st_11),size),]
+#st_13 <- st_13[sample(1:nrow(st_13),size),]
+
+#st_20 <- st_20[sample(1:nrow(st_20),size),]
+st_21 <- st_21[sample(1:nrow(st_21),size),]
+#st_23 <- st_23[sample(1:nrow(st_23),size),]
+
+df_relevant3 <- rbind(st_00,st_01,st_03,st_10,st_11,st_13,st_20,st_21,st_23)
+
+print("------------------------------------l")
+print("After Deletation")
+print("Staying in School")
+
+nrow(st_00)+nrow(st_01)+nrow(st_03)
+nrow(st_00)
+nrow(st_01)
+nrow(st_03)
+
+print("Dual VET")
+nrow(st_10)+nrow(st_11)+nrow(st_13)
+nrow(st_10)
+nrow(st_11)
+nrow(st_13)
+
+print("VET School")
+nrow(st_20)+nrow(st_21)+nrow(st_23)
+nrow(st_20)
+nrow(st_21)
+nrow(st_23)
+
+
+```
+
+
+
+```{r}
+library(dplyr)
+rm(size, st_0,st_1,st_2,st_00,st_01,st_03,st_10,st_11,st_13,st_20,st_21,st_23)
+df_relevant3$train<-as.factor(df_relevant3$train)
+df_relevant_full$train<-recode(df_relevant_full$train, "0" = "Staying in School", "1" = "Dual VET", "2" = "School-based VET")  
+
+df_relevant3$train<-recode(df_relevant3$train, "0" = "Staying in School", "1" = "Dual VET", "2" = "School-based VET")  
+save.image("PreparedData.Rdata")
+
+```
+
+# Summary
+Finally Create some Summary Statistics
+
+```{r fig.height=9, fig.width=9}
+library(corrplot)
+df_relevant3$train<-as.numeric(df_relevant3$train)
+cordf3<- cor(df_relevant3)
+corrplot(cordf3, method="circle", number.cex = 1.2)  + theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+only_regional<-df_relevant3[,c(2:11)]
+only_regional<-unique(only_regional)
+corrg<- cor(only_regional)
+corrplot(corrg, method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+
+```
+```{r fig.height=7, fig.width=7}
+library(corrplot)
+df_relevant3$train<-as.numeric(df_relevant3$train)
+cordf3<- cor(df_relevant3)
+corrplot(cordf3, method="circle", number.cex = 1.2)  + theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+only_regional<-df_relevant3[,c(2:11)]
+only_regional<-unique(only_regional)
+corrg<- cor(only_regional)
+corrplot(corrg, method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+```
+```{r fig.height=5, fig.width=5}
+library(corrplot)
+df_relevant3$train<-as.numeric(df_relevant3$train)
+cordf3<- cor(df_relevant3)
+corrplot(cordf3, method="circle", number.cex = 1.2)  + theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+only_regional<-df_relevant3[,c(2:11)]
+only_regional<-unique(only_regional)
+corrg<- cor(only_regional)
+corrplot(corrg, method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+```
+
+```{r fig.height=4, fig.width=4}
+library(corrplot)
+df_relevant3$train<-as.numeric(df_relevant3$train)
+cordf3<- cor(df_relevant3)
+corrplot(cordf3, method="circle", number.cex = 1.2)  + theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+only_regional<-df_relevant3[,c(2:11)]
+only_regional<-unique(only_regional)
+corrg<- cor(only_regional)
+corrplot(corrg, method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+
+```
+
+
+```{r fig.height=5, fig.width=5}
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+write.table(corrg, file="./exports4/corIndi.csv")
+write.table(cordf3, file="./exports4/corReg.csv")
+```
+

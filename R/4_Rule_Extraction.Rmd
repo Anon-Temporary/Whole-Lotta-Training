@@ -1,0 +1,522 @@
+---
+output:
+  word_document: default
+  html_document: default
+---
+r---
+title: "R Notebook"
+output: html_notebook
+---
+Just some 4D visualisation for further understanding
+
+
+```{r}
+rm(list=ls())
+library(neuralnet)
+library(tidyr)
+library(ggplot2)
+library(dplyr)
+
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+source("NeuralNetworkAnalysis.R")
+
+load("nn_model_4.Rdata")
+load("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen/shapley_computed.Rdata")
+nn_kat <- nn_model_4
+```
+
+
+
+Preparing the data
+
+```{r}
+ weights_2 <- weights_second
+ weights_1 <- weights_first
+```
+
+
+
+# Calculate how the neurons are distributed:
+
+```{r fig.height=9, fig.width=9}
+library(corrplot)
+library(ggpubr)
+hist1<-ggplot(kat_hidden) + geom_histogram(aes(hidden_1),fill="#1AA7EC")+
+  xlab(" Activities for Hidden Neuron 1") +ylab("Count")
+hist2<-ggplot(kat_hidden) + geom_histogram(aes(hidden_2),fill="#1AA7EC")+
+  xlab(" Activities for Hidden Neuron 2") +ylab("Count")
+hist3<-ggplot(kat_hidden) + geom_histogram(aes(hidden_3),fill="#1AA7EC")+
+  xlab(" Activities for Hidden Neuron 3") +ylab("Count")
+hist4<-ggplot(kat_hidden) + geom_histogram(aes(hidden_4),fill="#1AA7EC")+
+  xlab(" Activities for Hidden Neuron 4") +ylab("Count")
+ 
+ figure_hist <- ggarrange(hist1,hist2,hist3,hist4, ncol = 2, nrow = 2)
+ figure_hist
+ 
+```
+
+
+```{r fig.height=6, fig.width=6}
+plot(figure_hist)
+```
+
+
+
+```{r}
+setwd("Z:/Projects/<CensoredPath>/ML/Code/RAnalysen")
+write.table(cor(kat_hidden[,c("hidden_1","hidden_2","hidden_3","hidden_4")]), file="./exports4/corNeuron.csv")
+
+ corrplot(cor(kat_hidden[,c("hidden_1","hidden_2","hidden_3","hidden_4")]), method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+```
+
+
+
+```{r fig.height=4, fig.width=4}
+
+ corrplot(cor(kat_hidden[,c("hidden_1","hidden_2","hidden_3","hidden_4")]), method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+```
+
+```{r fig.height=3, fig.width=3}
+
+ corrplot(cor(kat_hidden[,c("hidden_1","hidden_2","hidden_3","hidden_4")]), method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+```
+
+
+```{r fig.height=2, fig.width=2}
+
+ corrplot(cor(kat_hidden[,c("hidden_1","hidden_2","hidden_3","hidden_4")]), method="circle", number.cex = 1.2) +   theme(legend.position="bottom",legend.title.align=0.5, legend.background=element_rect(size=0.2,colour="grey")) 
+```
+# Extraction for the Second layer
+
+
+```{r}
+test <- mtcars %>%
+  group_by(cyl) %>%
+  summarise(mean = mean(disp))
+```
+
+
+Alternative approach: Neuron 1-3 are binary, afterwads linear
+
+```{r}
+
+library(ggpubr)
+
+
+mul_matrix<-data.frame(x=1)
+mul<-c(1,0)
+for(i in 1:3)
+{ 
+  mul_matrix<-crossing(mul_matrix,mul)
+  colnames(mul_matrix)<-1:(i+1)
+}
+
+order_classes <- sort(c("Staying in School","Dual VET","School-based VET"))
+rand<-as.data.frame(0:1000/1000)
+mul_matrix <- crossing(mul_matrix,rand)
+colnames(mul_matrix) = c("BIAS","H1","H2", "H3", "H4")
+mul_matrix$type = as.factor(paste0(mul_matrix$H1,mul_matrix$H2,mul_matrix$H3))
+mul_matrix$Classification<-as.factor(apply(as.matrix(mul_matrix[,1:5]) %*% as.matrix(weights_2),1,which.max))
+mul_matrix$Classification<-as.factor(order_classes[mul_matrix$Classification])
+
+thresholds <- mul_matrix %>% group_by(mul_matrix$Classification,mul_matrix$type) %>% summarise(test = min(H4))
+write.table(thresholds, file="./exports4/thresholds.csv")
+
+
+g1<-ggplot() + geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.5) + theme(plot.title = element_text(hjust = 0.5))+ scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) + 
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in")) +
+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) +
+ ylab("Activation of Hidden Neuron 4") +
+ xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+
+g1
+```
+
+```{r fig.height=8, fig.width=6}
+plot(g1)
+```
+
+```{r fig.height=6, fig.width=6}
+plot(g1)
+```
+
+```{r fig.height=4, fig.width=6}
+plot(g1)
+```
+
+Show missclassification of Rule 2
+```{r fig.height=16, fig.width=12}
+
+kat_hidden$type <- as.factor(paste0(as.numeric(kat_hidden$hidden_1>0.5),as.numeric(kat_hidden$hidden_2>0.5),as.numeric(kat_hidden$hidden_3>0.5)))
+
+g2<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="Dual VET",], aes(x=type, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE)+
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+
+g3<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="School-based VET",], aes(x=type, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE)+
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+
+g4<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="Staying in School",], aes(x=type, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE) +
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+ figure <- ggarrange(g3,g2,g4,ncol = 1, nrow = 3, common.legend=TRUE, legend="bottom", legend.grob=get_legend(g4))
+ figure
+
+```
+
+```{r fig.height=16, fig.width=9}
+plot(figure)
+```
+
+
+```{r fig.height=12, fig.width=6}
+plot(figure)
+```
+
+# Compute Share of right Classifications by Second layer
+```{r}
+
+lay1stat <- data.frame(cbind(1,kat_hidden$hidden_1>0.5,kat_hidden$hidden_2>0.5,kat_hidden$hidden_3>0.5,kat_hidden$hidden_4))
+lay1stat$train <- kat_hidden$train
+colnames(lay1stat) = c("BIAS","H1","H2", "H3", "H4", "train")
+lay1stat$Classification <- apply(as.matrix(lay1stat[,1:5]) %*% as.matrix(weights_2),1,which.max)
+
+lay1stat$Classification<-as.factor(order_classes[lay1stat$Classification])
+
+mean(lay1stat$Classification==lay1stat$train)
+
+
+```
+
+
+# Rule Extraction for the first layer
+
+```{r}
+library(stringr)
+weights_normal <- as.data.frame(t(weights_1))
+weights_normal$Bias <- weights_normal$Bias + weights_normal$female + weights_normal$mig_background_0 + weights_normal$parents_academic_edu_0 + weights_normal$last_diploma_type_1 + weights_normal$parents_school_edu_1
+weights_normal$parents_academic_edu_1 <- weights_normal$parents_academic_edu_1 - weights_normal$parents_academic_edu_0
+weights_normal$male <- weights_normal$male - weights_normal$female
+weights_normal$mig_background_1 <- weights_normal$mig_background_1 - weights_normal$mig_background_0
+weights_normal$parents_school_edu_0 <- weights_normal$parents_school_edu_0 - weights_normal$parents_school_edu_1
+weights_normal$parents_school_edu_2 <- weights_normal$parents_school_edu_2 - weights_normal$parents_school_edu_1
+weights_normal$last_diploma_type_0<- weights_normal$last_diploma_type_0 - weights_normal$last_diploma_type_1
+weights_normal$last_diploma_type_2<- weights_normal$last_diploma_type_2 - weights_normal$last_diploma_type_1
+weights_normal<-subset(weights_normal,select=-c(female,mig_background_0,parents_academic_edu_0,last_diploma_type_1,parents_school_edu_1))
+weights_norm <- t(weights_normal)
+neuron_1 <- as.data.frame(weights_norm[,1])
+neuron_2 <- as.data.frame( weights_norm[,2])
+neuron_3 <- as.data.frame( weights_norm[,3])
+neuron_4 <- as.data.frame(weights_norm[,4])
+# Just a hack to keep rownames
+neuron_1$test <- 1
+neuron_2$test <- 1
+neuron_3$test <- 1
+neuron_4$test <- 1
+row.names(neuron_1) <- row.names(weights_norm)
+row.names(neuron_2) <- row.names(weights_norm)
+row.names(neuron_3) <- row.names(weights_norm)
+row.names(neuron_4) <- row.names(weights_norm)
+
+
+
+library(dplyr)
+library(Hmisc)
+library(stringr)
+#neuron_1_selected <- rownames(neuron_1[abs(neuron_1[,1]) > 0.25 * min(abs(neuron_1[order(neuron_1$`weights_norm[, 1]`),1][1]), abs(neuron_1[order(-neuron_1$`weights_norm[, 1]`),1][1])),])
+#neuron_2_selected <- rownames(neuron_2[abs(neuron_2[,1]) > 0.25 * min(abs(neuron_2[order(neuron_2$`weights_norm[, 2]`),1][1]), abs(neuron_2[order(-neuron_2$`weights_norm[, 2]`),1][1])),])
+#neuron_3_selected <- rownames(neuron_3[abs(neuron_3[,1]) > 0.25 * min(abs(neuron_3[order(neuron_3$`weights_norm[, 3]`),1][1]), abs(neuron_3[order(-neuron_3$`weights_norm[, 3]`),1][1])),])
+#neuron_4_selected <- rownames(neuron_4[abs(neuron_4[,1]) > 0.25 * min(abs(neuron_4[order(neuron_4$`weights_norm[, 4]`),1][1]), abs(neuron_4[order(-neuron_4$`weights_norm[, 4]`),1][1])),])
+
+neuron_1_selected <- rownames(neuron_1[abs(neuron_1[,1]) >  mean(abs(neuron_1[order(neuron_1$`weights_norm[, 1]`),1])),])
+neuron_2_selected <- rownames(neuron_2[abs(neuron_2[,1]) >  mean(abs(neuron_2[order(neuron_2$`weights_norm[, 2]`),1])),]) 
+neuron_3_selected <- rownames(neuron_3[abs(neuron_3[,1]) >  mean(abs(neuron_3[order(neuron_3$`weights_norm[, 3]`),1])),]) 
+neuron_4_selected <- rownames(neuron_4[abs(neuron_4[,1]) > mean(abs(neuron_4[order(neuron_4$`weights_norm[, 4]`),1])),])
+
+
+neuron_1<-round(neuron_1[neuron_1_selected,c(1,2)],2)
+neuron_2<-round(neuron_2[neuron_2_selected,c(1,2)],2) 
+neuron_3<-round(neuron_3[neuron_3_selected,c(1,2)],2) 
+neuron_4<-round(neuron_4[neuron_4_selected,c(1,2)],2)
+
+neuron_1_table <- neuron_1[order(neuron_1[,1]),]
+rownames(neuron_1_table)<- gsub("_", "_",  rownames(neuron_1_table))
+colnames(neuron_1_table)<-c("Weights","delete")
+neuron_1_table 
+
+neuron_2_table <- neuron_2[order(neuron_2[,1]),]
+rownames(neuron_2_table)<- gsub("_", "_",  rownames(neuron_2_table))
+colnames(neuron_2_table)<-c("Weights","delete")
+neuron_2_table 
+
+neuron_3_table <- neuron_3[order(neuron_3[,1]),]
+rownames(neuron_3_table)<- gsub("_", "_",  rownames(neuron_3_table))
+colnames(neuron_3_table)<-c("Weights","delete")
+neuron_3_table 
+
+neuron_4_table <- neuron_4[order(neuron_4[,1]),]
+rownames(neuron_4_table)<- gsub("_", "_",  rownames(neuron_4_table))
+colnames(neuron_4_table)<-c("Weights","delete")
+neuron_4_table 
+
+write.table(neuron_1_table, file="./exports4/n1_table.csv")
+write.table(neuron_2_table, file="./exports4/n2_table.csv")
+write.table(neuron_3_table, file="./exports4/n3_table.csv")
+write.table(neuron_4_table, file="./exports4/n4_table.csv")
+
+
+
+```
+
+## Compute share of right classifications by 1 and 2
+```{r}
+kat_hidden$Bias <- 1
+kat_hidden<-data.frame(kat_hidden)
+
+
+kat_hidden$rule1 <- #test_3[2]>0.5
+ ((as.matrix(data.frame(kat_hidden[,rownames(neuron_1)]))) %*% (as.numeric(neuron_1[,1])) > 0 )
+
+kat_hidden$rule2 <- #test_3[2]>0.5
+ ((as.matrix(data.frame(kat_hidden[,rownames(neuron_2)]))) %*% (as.numeric(neuron_2[,1])) > 0 )
+
+kat_hidden$rule3 <- #test_3[2]>0.5
+ ((as.matrix(data.frame(kat_hidden[,rownames(neuron_3)]))) %*% (as.numeric(neuron_3[,1])) > 0 )
+
+kat_hidden$rule4 <-  (as.matrix(data.frame(kat_hidden[,rownames(neuron_4)])) %*% as.numeric(neuron_4[,1]))
+kat_hidden$rule4 <- 1/ (1+exp(-kat_hidden$rule4))
+
+lay1stat <- data.frame(cbind(1,kat_hidden$rule1,kat_hidden$rule2,kat_hidden$rule3,kat_hidden$rule4))
+lay1stat$train <- kat_hidden$train
+colnames(lay1stat) = c("BIAS","H1","H2", "H3", "H4", "train")
+lay1stat$Classification <- apply(as.matrix(lay1stat[,1:5]) %*% as.matrix(weights_2),1,which.max)
+
+lay1stat$Classification<-as.factor(order_classes[lay1stat$Classification])
+kat_hidden$ruleClassification <- lay1stat$Classification
+
+mean(lay1stat$Classification==lay1stat$train)
+
+```
+
+```{r}
+print("Right Choices:")
+mean(kat_hidden$train == kat_hidden$ruleClassification)
+
+b0t0 <- sum(kat_hidden$ruleClassification==classes[1] & kat_hidden$train==classes[1]) 
+b1t0 <- sum(kat_hidden$ruleClassification==classes[2] & kat_hidden$train==classes[1]) 
+b2t0 <- sum(kat_hidden$ruleClassification==classes[3] & kat_hidden$train==classes[1]) 
+
+b0t1<-sum(kat_hidden$ruleClassification==classes[1] & kat_hidden$train==classes[2]) 
+b1t1<-sum(kat_hidden$ruleClassification==classes[2] & kat_hidden$train==classes[2]) 
+b2t1<-sum(kat_hidden$ruleClassification==classes[3] & kat_hidden$train==classes[2]) 
+
+b0t2<-sum(kat_hidden$ruleClassification==classes[1] & kat_hidden$train==classes[3]) 
+b1t2<-sum(kat_hidden$ruleClassification==classes[2] & kat_hidden$train==classes[3]) 
+b2t2<- sum(kat_hidden$ruleClassification==classes[3] & kat_hidden$train==classes[3]) 
+
+
+real0<-c(b0t0,b1t0,b2t0)
+real1<-c(b0t1,b1t1,b2t1)
+real2<-c(b0t2,b1t2,b2t2)
+
+pr_matrix<-cbind(real0,real1,real2)
+rownames(pr_matrix)<-classes
+print("")
+print("Absolute Classifications ")
+
+pr_matrix
+
+print("")
+print("Real 0,1,2")
+t0<-sum(kat_hidden$train==classes[1])
+t1<-sum(kat_hidden$train==classes[2])
+t2<-sum(kat_hidden$train==classes[3])
+t0
+t1
+t2
+
+print("")
+print("Prediction 0,1,2")
+b0<-sum(kat_hidden$ruleClassification==classes[1])
+b1<-sum(kat_hidden$ruleClassification==classes[2])
+b2<-sum(kat_hidden$ruleClassification==classes[3])
+b0 
+b1 
+b2
+
+train<-c(t0,t1,t2)
+best<-c(b0,b1,b2)
+
+print("")
+print("relative to classification ")
+pr_matrix1<-pr_matrix /best
+pr_matrix1
+
+print("")
+print("relative to classified")
+
+pr_matrix2<-t(t(pr_matrix) / train)
+pr_matrix2
+
+
+write.table(pr_matrix, file="./exports4/pr_matrix_rules.csv")
+write.table(pr_matrix1, file="./exports4/pr_matrix1_rules.csv")
+write.table(pr_matrix2, file="./exports4/pr_matrix2_rules.csv")
+```
+
+Show missclassification of Rule 2
+```{r fig.height=16, fig.width=12}
+
+kat_hidden$typer <- as.factor(paste0(as.numeric(kat_hidden$rule1),as.numeric(kat_hidden$rule2),as.numeric(kat_hidden$rule3)))
+
+g2<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="Dual VET",], aes(x=typer, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE)+
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+
+g3<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="School-based VET",], aes(x=typer, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE)+
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+
+g4<-ggplot() + 
+  geom_bar(data=mul_matrix, aes( x=type, fill=Classification), position="fill", alpha=0.6) +
+  theme(plot.title = element_text(hjust = 0.5))+ theme(legend.position="bottom")  + 
+  geom_jitter(data=kat_hidden[kat_hidden$train=="Staying in School",], aes(x=typer, y=hidden_4, colour=train), shape=16, width=0.35) +
+    scale_fill_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+    scale_colour_manual(values = c("Staying in School" = "#65AD8D","Dual VET" = "#D8787B", "School-based VET" = "#1AA7EC")) +
+theme(legend.position="bottom",legend.title.align=0.5, legend.margin= margin(r=1, l=1, t=0.5, b=0.5, unit="cm"),  legend.background=element_rect(size=0.2,colour="grey"), legend.key.width= unit(1, "in"))+    guides(fill=guide_legend(title.position="bottom",label.position = "bottom")) + guides(shape=FALSE)+ guides(colour=FALSE) +
+ ylab("Activation of Hidden Neuron 4") +
+  xlab("Configuration of Activities for Hidden Neuron 1-3") 
+
+ figure <- ggarrange(g3,g2,g4,ncol = 1, nrow = 3, common.legend=TRUE, legend="bottom", legend.grob=get_legend(g4))
+ figure
+
+```
+
+```{r fig.height=16, fig.width=9}
+plot(figure)
+```
+
+
+```{r fig.height=12, fig.width=6}
+plot(figure)
+```
+
+# Aggregate wrong and right clasisfications per District
+
+
+```{r}
+
+district_stat <- kat_hidden %>% group_by(reg_industry_area,reg_unemployed,reg_urban_permeation) %>% summarise(
+                                       num_obs=n(),       
+                                       num_school=sum(train=="Staying in School"),
+                                       num_dual=sum(train=="Dual VET"),
+                                       num_sbvet=sum(train=="School-based VET"),
+                                       num_school_right=sum(train=="Staying in School" & ruleClassification=="Staying in School"),
+                                       num_dual_right=sum(train=="Dual VET"  & ruleClassification=="Dual VET"),
+                                       num_sbvet_right=sum(train=="School-based VET" & ruleClassification=="School-based VET"),
+                                       ShareRight=mean(train==ruleClassification)) %>% arrange(ShareRight)                          
+
+write.table(district_stat, file="./exports4/district_stat.csv")
+                                                                                                     
+district_stat <- district_stat[district_stat$num_obs>1,]
+write.table(district_stat, file="./exports4/district_stat_2.csv")
+```
+
+```{r}
+
+```
+
+
+
+# Simulate some inputs according to the orginal distribution
+
+
+
+set.seed(8004)
+results <- vector(length=2)
+sym_data<-data.frame(NULL)
+
+for(i in 1:10000)
+{
+  
+single_obs <- as.data.frame(t(c(1,runif(23))))
+single_obs[,13:24] <- 0
+single_obs[,sample(13:15,1)] <- 1
+single_obs[,sample(16:17,1)] <- 1
+single_obs[,sample(18:19,1)] <- 1
+single_obs[,sample(20:22,1)] <- 1
+single_obs[,sample(23:24,1)] <- 1
+
+colnames(single_obs)<-row.names(weights_1)
+
+#Calculate results from matrix
+test <- as.matrix(single_obs) %*% as.matrix(weights_1)
+test_2 <- 1/ (1+exp(-test))
+test_3 <- c(1,test_2)
+result<-which.max(test_3 %*% as.matrix(weights_2))
+
+n1 <- #test_3[2]>0.5
+  (as.numeric(single_obs[,rownames(neuron_1)]) %*% (as.numeric(neuron_1[,1]))) > 0 
+
+n2 <- #test_3[3]>0.5
+  (as.numeric(single_obs[,rownames(neuron_2)]) %*% (as.numeric(neuron_2[,1]))) > 0 
+
+n3 <- #test_3[4]>0.5
+  (as.numeric(single_obs[,rownames(neuron_3)]) %*% (as.numeric(neuron_3[,1]))) > 0 
+
+
+n4 <- #test_3[5]>0.5
+  max(0,min((as.numeric(single_obs[,rownames(neuron_4)]) %*% (as.numeric(neuron_4[,1])))/4 + 0.5,1))
+
+
+n5 <- #test_3[6]>0.5
+   max(0,min((as.numeric(single_obs[,rownames(neuron_5)]) %*% (as.numeric(neuron_5[,1])))/4 + 0.5,1))
+
+neurons <- as.data.frame(t(c(1,n1,n2,n3,n4,n5)))
+neurons$result <- as.factor(apply(  (t(as.matrix(as.numeric(neurons))) %*% as.matrix(weights_2[1:6,]))   ,1,which.max))
+neurons$nn <- as.factor(result)
+colnames(test_2)<-c("N1", "N2", "N3", "N4", "N5")
+neurons<-cbind(test_2,neurons)
+sym_data<-rbind(sym_data,neurons)                          
+}
+
+mean(sym_data$result == sym_data$nn)
+sym_data <- sym_data[sym_data$result != sym_data$nn,]
+
